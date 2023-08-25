@@ -42,6 +42,184 @@ from lora_diffusion import (
 logger = get_logger(__name__)
 
 
+class DreamBoothDataset(Dataset):
+    """
+    A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
+    It pre-processes the images and the tokenizes prompts.
+    """
+
+    def __init__(
+            self,
+            instance_data_root,
+            instance_prompt,
+            tokenizer,
+            class_data_root=None,
+            class_prompt=None,
+            # use_image_captions=False,
+            # unconditional_prompt=" ",
+            size=512,
+            # augment_min_resolution=None,
+            augment_center_crop=False,
+            augment_hflip=False,
+            # debug=False,
+    ):
+        self.tokenizer = tokenizer
+        # self.use_image_captions = use_image_captions
+        self.size = size
+        self.augment_center_crop = augment_center_crop
+        self.augment_hflip = augment_hflip
+
+        self.instance_data_root = Path(instance_data_root)
+        if not self.instance_data_root.exists():
+            raise ValueError("Instance images root doesn't exists.")
+
+        self.instance_images_path = [path for path in self.instance_data_root.glob('*') if '.txt' not in path.suffix]
+        self.num_instance_images = len(self.instance_images_path)
+        self.instance_prompt = instance_prompt
+        # self.debug = debug
+        self._length = self.num_instance_images
+
+        if class_data_root is not None:
+            self.class_data_root = Path(class_data_root)
+            self.class_data_root.mkdir(parents=True, exist_ok=True)
+
+            self.class_images_path = [path for path in self.class_data_root.glob('*') if '.txt' not in path.suffix]
+            random.shuffle(self.class_images_path)
+            self.num_class_images = len(self.class_images_path)
+            self._length = max(self.num_class_images, self.num_instance_images)
+            self.class_prompt = class_prompt
+        else:
+            self.class_data_root = None
+
+        # self.unconditional_promptAAAAAAAAAAAAAAAAAAAA = unconditional_prompt
+
+        # Data augmentation pipeline
+        augment_list = []
+        # if augment_min_resolution is not None:
+        #     augment_list.append(transforms.Resize(augment_min_resolution))
+        if augment_center_crop:
+            augment_list.append(transforms.CenterCrop(size))
+        else:
+            augment_list.append(transforms.RandomCrop(size))
+        if augment_hflip:
+            augment_list.append(transforms.RandomHorizontalFlip(0.5))
+
+        # Convert to format usable by model.
+        # Keep separate in case dumping augmentations to disk
+        transform_list = []
+        transform_list.append(transforms.ToTensor())
+        transform_list.append(transforms.Normalize([0.5], [0.5]))
+
+        if len(augment_list) > 0:
+            self.augment_transforms = transforms.Compose(augment_list)
+        else:
+            self.augment_transforms = None
+
+        self.image_transforms = transforms.Compose(transform_list)
+
+    def __len__(self):
+        return self._length
+
+    def __getitem__(self, index):
+        example = {}
+        image_path = self.instance_images_path[index % self.num_instance_images]
+        instance_image = Image.open(image_path)
+        if not instance_image.mode == "RGB":
+            instance_image = instance_image.convert("RGB")
+        if self.augment_transforms is not None:
+            instance_image = self.augment_transforms(instance_image)
+            if self.debug:
+                hash_image = hashlib.sha1(instance_image.tobytes()).hexdigest()
+                image_filename = image_path.stem + f"-{hash_image}.jpg"
+                instance_image.save(os.path.join("/content/augment", image_filename))
+        example["instance_images"] = self.image_transforms(instance_image)
+
+        # if self.use_image_captions:
+        #     caption_path = image_path.with_suffix(".txt")
+        #     if caption_path.exists():
+        #         with open(caption_path) as f:
+        #             caption = f.read()
+        #     else:
+        #         caption = caption_path.stem
+        #
+        #     caption = ''.join([i for i in caption if not i.isdigit()])  # not sure necessary
+        #     caption = caption.replace("_", " ")
+        #     self.instance_prompt = caption
+
+        example["instance_prompt_ids"] = self.tokenizer(
+            self.instance_prompt,
+            padding="do_not_pad",
+            truncation=True,
+            max_length=self.tokenizer.model_max_length,
+        ).input_ids
+
+        # if self.debug:
+        #     print("\nInstance: " + str(image_path))
+        #     print(self.instance_prompt)
+
+        if self.class_data_root:
+            image_path = self.class_images_path[index % self.num_class_images]
+            class_image = Image.open(image_path)
+            if not class_image.mode == "RGB":
+                class_image = class_image.convert("RGB")
+            if self.augment_transforms is not None:
+                class_image = self.augment_transforms(class_image)
+                if self.debug:
+                    hash_image = hashlib.sha1(class_image.tobytes()).hexdigest()
+                    image_filename = image_path.stem + f"-{hash_image}.jpg"
+                    class_image.save(os.path.join("/content/augment", image_filename))
+            example["class_images"] = self.image_transforms(class_image)
+
+            # if self.use_image_captions:
+            #     caption_path = image_path.with_suffix(".txt")
+            #     if caption_path.exists():
+            #         with open(caption_path) as f:
+            #             caption = f.read()
+            #     else:
+            #         caption = caption_path.stem
+            #
+            #     caption = ''.join([i for i in caption if not i.isdigit()])  # not sure necessary
+            #     caption = caption.replace("_", " ")
+            #     self.class_prompt = caption
+
+            example["class_prompt_ids"] = self.tokenizer(
+                self.class_prompt,
+                padding="do_not_pad",
+                truncation=True,
+                max_length=self.tokenizer.model_max_length,
+            ).input_ids
+
+        #     if self.debug:
+        #         print("\nClass: " + str(image_path))
+        #         print(self.class_prompt)
+        #
+        # example["unconditional_prompt_ids"] = self.tokenizer(
+        #     self.unconditional_promptAAAAAAAAAAAAAAAAAAAA,
+        #     padding="do_not_pad",
+        #     truncation=True,
+        #     max_length=self.tokenizer.model_max_length,
+        # ).input_ids
+
+        return example
+
+
+class PromptDataset(Dataset):
+    "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
+
+    def __init__(self, prompt, num_samples):
+        self.prompt = prompt
+        self.num_samples = num_samples
+
+    def __len__(self):
+        return self.num_samples
+
+    def __getitem__(self, index):
+        example = {}
+        example["prompt"] = self.prompt
+        example["index"] = index
+        return example
+
+
 def parse_args(input_args=None):
     parser = argparse.ArgumentParser(description="Simple example of a training script.")
     parser.add_argument(
@@ -135,7 +313,12 @@ def parse_args(input_args=None):
         action="store_true",
         help="Flag to add prior preservation loss.",
     )
-    parser.add_argument("--prior_loss_weight", type=float, default=1.0, help="The weight of prior preservation loss.")
+    parser.add_argument(
+        "--prior_loss_weight",
+        type=float,
+        default=1.0,
+        help="The weight of prior preservation loss."
+    )
     parser.add_argument(
         "--num_class_images",
         type=int,
@@ -161,22 +344,36 @@ def parse_args(input_args=None):
             " resolution"
         ),
     )
-    parser.add_argument("--augment_min_resolution", type=int, default=None,
-                        help="Resize minimum image dimension before augmention pipeline.")
+    # parser.add_argument(
+    #     "--augment_min_resolution", type=int, default=None,
+    #                     help="Resize minimum image dimension before augmention pipeline.")
     parser.add_argument(
         "--augment_center_crop", action="store_true", help="Whether to center crop images before resizing to resolution"
     )
     parser.add_argument(
         "--augment_hflip", action="store_true", help="Whether to center crop images before resizing to resolution"
     )
-    parser.add_argument("--train_text_encoder", action="store_true", help="Whether to train the text encoder")
     parser.add_argument(
-        "--train_batch_size", type=int, default=4, help="Batch size (per device) for the training dataloader."
+        "--train_text_encoder",
+        action="store_true",
+        help="Whether to train the text encoder"
     )
     parser.add_argument(
-        "--sample_batch_size", type=int, default=4, help="Batch size (per device) for sampling images."
+        "--train_batch_size",
+        type=int,
+        default=4,
+        help="Batch size (per device) for the training dataloader."
     )
-    parser.add_argument("--num_train_epochs", type=int, default=1)
+    parser.add_argument(
+        "--sample_batch_size",
+        type=int,
+        default=4,
+        help="Batch size (per device) for sampling images."
+    )
+    parser.add_argument(
+        "--num_train_epochs",
+        type=int,
+        default=1)
     parser.add_argument(
         "--max_train_steps",
         type=int,
@@ -222,7 +419,9 @@ def parse_args(input_args=None):
         ),
     )
     parser.add_argument(
-        "--lr_warmup_steps", type=int, default=500, help="Number of steps for the warmup in the lr scheduler."
+        "--lr_warmup_steps",
+        type=int, default=500,
+        help="Number of steps for the warmup in the lr scheduler."
     )
     parser.add_argument(
         "--lr_cosine_num_cycles", type=float, default=1.0,
@@ -242,7 +441,7 @@ def parse_args(input_args=None):
     parser.add_argument("--adam_weight_decay", type=float, default=1e-2, help="Weight decay to use.")
     parser.add_argument("--adam_epsilon", type=float, default=1e-08, help="Epsilon value for the Adam optimizer")
     parser.add_argument("--max_grad_norm", default=1.0, type=float, help="Max gradient norm.")
-    parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
+    # parser.add_argument("--push_to_hub", action="store_true", help="Whether or not to push the model to the Hub.")
     parser.add_argument("--hub_token", type=str, default=None, help="The token to use to push to the Model Hub.")
     parser.add_argument(
         "--hub_model_id",
@@ -273,28 +472,32 @@ def parse_args(input_args=None):
             " flag passed with the `accelerate.launch` command. Use this argument to override the accelerate config."
         ),
     )
-    parser.add_argument(
-        "--use_image_captions",
-        action="store_true",
-        help="Get captions from textfile, otherwise filename",
-    )
-    parser.add_argument(
-        "--conditioning_dropout_prob",
-        type=float,
-        default=0.0,
-        help="Probability that conditioning is dropped.",
-    )
+    # parser.add_argument(
+    #     "--use_image_captions",
+    #     action="store_true",
+    #     help="Get captions from textfile, otherwise filename",
+    # )
+    # parser.add_argument(
+    #     "--conditioning_dropout_prob",
+    #     type=float,
+    #     default=0.0,
+    #     help="Probability that conditioning is dropped.",
+    # )
     parser.add_argument(
         "--lora_rank",
         type=int,
         default=4,
         help="Rank reduction for LoRA.",
     )
+    # parser.add_argument(
+    #     "--debug", action="store_true", help="Some exra verbosity."
+    # )
+    # parser.add_argument("--unconditional_prompt", type=str, default=" ", help="Prompt for conditioning dropout.")
     parser.add_argument(
-        "--debug", action="store_true", help="Some exra verbosity."
+        "--local_rank",
+        type=int, default=-1,
+        help="For distributed training: local_rank"
     )
-    parser.add_argument("--unconditional_prompt", type=str, default=" ", help="Prompt for conditioning dropout.")
-    parser.add_argument("--local_rank", type=int, default=-1, help="For distributed training: local_rank")
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -312,184 +515,6 @@ def parse_args(input_args=None):
             raise ValueError("You must specify prompt for class images.")
 
     return args
-
-
-class DreamBoothDataset(Dataset):
-    """
-    A dataset to prepare the instance and class images with the prompts for fine-tuning the model.
-    It pre-processes the images and the tokenizes prompts.
-    """
-
-    def __init__(
-            self,
-            instance_data_root,
-            instance_prompt,
-            tokenizer,
-            class_data_root=None,
-            class_prompt=None,
-            use_image_captions=False,
-            unconditional_prompt=" ",
-            size=512,
-            augment_min_resolution=None,
-            augment_center_crop=False,
-            augment_hflip=False,
-            debug=False,
-    ):
-        self.tokenizer = tokenizer
-        self.use_image_captions = use_image_captions
-        self.size = size
-        self.augment_center_crop = augment_center_crop
-        self.augment_hflip = augment_hflip
-
-        self.instance_data_root = Path(instance_data_root)
-        if not self.instance_data_root.exists():
-            raise ValueError("Instance images root doesn't exists.")
-
-        self.instance_images_path = [path for path in self.instance_data_root.glob('*') if '.txt' not in path.suffix]
-        self.num_instance_images = len(self.instance_images_path)
-        self.instance_prompt = instance_prompt
-        self.debug = debug
-        self._length = self.num_instance_images
-
-        if class_data_root is not None:
-            self.class_data_root = Path(class_data_root)
-            self.class_data_root.mkdir(parents=True, exist_ok=True)
-
-            self.class_images_path = [path for path in self.class_data_root.glob('*') if '.txt' not in path.suffix]
-            random.shuffle(self.class_images_path)
-            self.num_class_images = len(self.class_images_path)
-            self._length = max(self.num_class_images, self.num_instance_images)
-            self.class_prompt = class_prompt
-        else:
-            self.class_data_root = None
-
-        self.unconditional_prompt = unconditional_prompt
-
-        # Data augmentation pipeline
-        augment_list = []
-        if augment_min_resolution is not None:
-            augment_list.append(transforms.Resize(augment_min_resolution))
-        if augment_center_crop:
-            augment_list.append(transforms.CenterCrop(size))
-        else:
-            augment_list.append(transforms.RandomCrop(size))
-        if augment_hflip:
-            augment_list.append(transforms.RandomHorizontalFlip(0.5))
-
-        # Convert to format usable by model.
-        # Keep separate in case dumping augmentations to disk
-        transform_list = []
-        transform_list.append(transforms.ToTensor())
-        transform_list.append(transforms.Normalize([0.5], [0.5]))
-
-        if len(augment_list) > 0:
-            self.augment_transforms = transforms.Compose(augment_list)
-        else:
-            self.augment_transforms = None
-
-        self.image_transforms = transforms.Compose(transform_list)
-
-    def __len__(self):
-        return self._length
-
-    def __getitem__(self, index):
-        example = {}
-        image_path = self.instance_images_path[index % self.num_instance_images]
-        instance_image = Image.open(image_path)
-        if not instance_image.mode == "RGB":
-            instance_image = instance_image.convert("RGB")
-        if self.augment_transforms is not None:
-            instance_image = self.augment_transforms(instance_image)
-            if self.debug:
-                hash_image = hashlib.sha1(instance_image.tobytes()).hexdigest()
-                image_filename = image_path.stem + f"-{hash_image}.jpg"
-                instance_image.save(os.path.join("/content/augment", image_filename))
-        example["instance_images"] = self.image_transforms(instance_image)
-
-        if self.use_image_captions:
-            caption_path = image_path.with_suffix(".txt")
-            if caption_path.exists():
-                with open(caption_path) as f:
-                    caption = f.read()
-            else:
-                caption = caption_path.stem
-
-            caption = ''.join([i for i in caption if not i.isdigit()])  # not sure necessary
-            caption = caption.replace("_", " ")
-            self.instance_prompt = caption
-
-        example["instance_prompt_ids"] = self.tokenizer(
-            self.instance_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
-
-        if self.debug:
-            print("\nInstance: " + str(image_path))
-            print(self.instance_prompt)
-
-        if self.class_data_root:
-            image_path = self.class_images_path[index % self.num_class_images]
-            class_image = Image.open(image_path)
-            if not class_image.mode == "RGB":
-                class_image = class_image.convert("RGB")
-            if self.augment_transforms is not None:
-                class_image = self.augment_transforms(class_image)
-                if self.debug:
-                    hash_image = hashlib.sha1(class_image.tobytes()).hexdigest()
-                    image_filename = image_path.stem + f"-{hash_image}.jpg"
-                    class_image.save(os.path.join("/content/augment", image_filename))
-            example["class_images"] = self.image_transforms(class_image)
-
-            if self.use_image_captions:
-                caption_path = image_path.with_suffix(".txt")
-                if caption_path.exists():
-                    with open(caption_path) as f:
-                        caption = f.read()
-                else:
-                    caption = caption_path.stem
-
-                caption = ''.join([i for i in caption if not i.isdigit()])  # not sure necessary
-                caption = caption.replace("_", " ")
-                self.class_prompt = caption
-
-            example["class_prompt_ids"] = self.tokenizer(
-                self.class_prompt,
-                padding="do_not_pad",
-                truncation=True,
-                max_length=self.tokenizer.model_max_length,
-            ).input_ids
-
-            if self.debug:
-                print("\nClass: " + str(image_path))
-                print(self.class_prompt)
-
-        example["unconditional_prompt_ids"] = self.tokenizer(
-            self.unconditional_prompt,
-            padding="do_not_pad",
-            truncation=True,
-            max_length=self.tokenizer.model_max_length,
-        ).input_ids
-
-        return example
-
-
-class PromptDataset(Dataset):
-    "A simple dataset to prepare the prompts to generate class images on multiple GPUs."
-
-    def __init__(self, prompt, num_samples):
-        self.prompt = prompt
-        self.num_samples = num_samples
-
-    def __len__(self):
-        return self.num_samples
-
-    def __getitem__(self, index):
-        example = {}
-        example["prompt"] = self.prompt
-        example["index"] = index
-        return example
 
 
 def get_full_repo_name(model_id: str, organization: Optional[str] = None, token: Optional[str] = None):
@@ -549,7 +574,6 @@ def main(args):
         set_seed(args.seed)
 
     if args.with_prior_preservation:
-        pipeline = None
         class_images_dir = Path(args.class_data_dir)
         if not class_images_dir.exists():
             class_images_dir.mkdir(parents=True)
@@ -557,32 +581,35 @@ def main(args):
 
         if cur_class_images < args.num_class_images:
             torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
-            if pipeline is None:
-                pipeline = StableDiffusionPipeline.from_pretrained(
-                    args.pretrained_model_name_or_path,
-                    vae=AutoencoderKL.from_pretrained(
-                        args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
-                        subfolder=None if args.pretrained_vae_name_or_path else "vae",
-                        revision=None if args.pretrained_vae_name_or_path else args.revision,
-                        torch_dtype=torch_dtype,
-                    ),
-                    torch_dtype=torch_dtype,
-                    safety_checker=None,
-                    revision=args.revision
-                )
-                pipeline.set_progress_bar_config(disable=True)
-                pipeline.to(accelerator.device)
+            pipeline = StableDiffusionPipeline.from_pretrained(
+                args.pretrained_model_name_or_path,
+                # vae=AutoencoderKL.from_pretrained(
+                #     args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
+                #     subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                #     revision=None if args.pretrained_vae_name_or_path else args.revision,
+                #     torch_dtype=torch_dtype,
+                # ),
+                torch_dtype=torch_dtype,
+                safety_checker=None,
+                revision=args.revision
+            )
+            pipeline.set_progress_bar_config(disable=True)
 
             num_new_images = args.num_class_images - cur_class_images
             logger.info(f"Number of class images to sample: {num_new_images}.")
 
             sample_dataset = PromptDataset(args.class_prompt, num_new_images)
-            sample_dataloader = torch.utils.data.DataLoader(sample_dataset, batch_size=args.sample_batch_size)
+            sample_dataloader = torch.utils.data.DataLoader(
+                sample_dataset, batch_size=args.sample_batch_size
+            )
 
             sample_dataloader = accelerator.prepare(sample_dataloader)
+            pipeline.to(accelerator.device)
 
             for example in tqdm(
-                    sample_dataloader, desc="Generating class images", disable=not accelerator.is_local_main_process
+                    sample_dataloader,
+                    desc="Generating class images",
+                    disable=not accelerator.is_local_main_process,
             ):
                 images = pipeline(example["prompt"]).images
 
@@ -597,19 +624,20 @@ def main(args):
 
     # Handle the repository creation
     if accelerator.is_main_process:
-        if args.push_to_hub:
-            if args.hub_model_id is None:
-                repo_name = get_full_repo_name(Path(args.output_dir).name, token=args.hub_token)
-            else:
-                repo_name = args.hub_model_id
-            repo = Repository(args.output_dir, clone_from=repo_name)
 
-            with open(os.path.join(args.output_dir, ".gitignore"), "w+") as gitignore:
-                if "step_*" not in gitignore:
-                    gitignore.write("step_*\n")
-                if "epoch_*" not in gitignore:
-                    gitignore.write("epoch_*\n")
-        elif args.output_dir is not None:
+        # if args.push_to_hub:
+        #     if args.hub_model_id is None:
+        #         repo_name = get_full_repo_name(Path(args.output_dir).name, token=args.hub_token)
+        #     else:
+        #         repo_name = args.hub_model_id
+        #     repo = Repository(args.output_dir, clone_from=repo_name)
+        #
+        #     with open(os.path.join(args.output_dir, ".gitignore"), "w+") as gitignore:
+        #         if "step_*" not in gitignore:
+        #             gitignore.write("step_*\n")
+        #         if "epoch_*" not in gitignore:
+        #             gitignore.write("epoch_*\n")
+        if args.output_dir is not None:
             os.makedirs(args.output_dir, exist_ok=True)
 
     # Load the tokenizer
@@ -651,32 +679,32 @@ def main(args):
                 f" correctly and a GPU is available: {e}"
             )
 
-
     unet.requires_grad_(False)
     unet_lora_params, unet_names = inject_trainable_lora(unet, r=args.lora_rank)
-    if args.debug:
-        for _up, _down in extract_lora_ups_down(unet):
-            print("Before training: Unet First Layer lora up", _up.weight.data)
-            print("Before training: Unet First Layer lora down", _down.weight.data)
-            break
+
+    # if args.debug:
+    #     for _up, _down in extract_lora_ups_down(unet):
+    #         print("Before training: Unet First Layer lora up", _up.weight.data)
+    #         print("Before training: Unet First Layer lora down", _down.weight.data)
+    #         break
 
     vae.requires_grad_(False)
+    text_encoder.requires_grad_(False)
 
     if args.train_text_encoder:
-        text_encoder.requires_grad_(False)
         text_encoder_lora_params, text_encoder_names = inject_trainable_lora(
-            text_encoder, target_replace_module=["CLIPAttention"],
+            text_encoder,
+            target_replace_module=["CLIPAttention"],
             r=args.lora_rank,
         )
-        if args.debug:
-            for _up, _down in extract_lora_ups_down(
-                    text_encoder, target_replace_module=["CLIPAttention"]
-            ):
-                print("Before training: text encoder First Layer lora up", _up.weight.data)
-                print("Before training: text encoder First Layer lora down", _down.weight.data)
-                break
-    elif not args.train_text_encoder:
-        text_encoder.requires_grad_(False)
+        # if args.debug:
+        #     for _up, _down in extract_lora_ups_down(
+        #             text_encoder, target_replace_module=["CLIPAttention"]
+        #     ):
+        #         print("Before training: text encoder First Layer lora up", _up.weight.data)
+        #         print("Before training: text encoder First Layer lora down", _down.weight.data)
+        #         break
+
 
     if args.gradient_checkpointing:
         unet.enable_gradient_checkpointing()
@@ -685,7 +713,10 @@ def main(args):
 
     if args.scale_lr:
         args.learning_rate = (
-                args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
+                args.learning_rate
+                * args.gradient_accumulation_steps
+                * args.train_batch_size
+                * accelerator.num_processes
         )
 
     # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
@@ -707,12 +738,9 @@ def main(args):
         else args.learning_rate_text
     )
 
-
     params_to_optimize = (
         [
-            {
-                "params": itertools.chain(*unet_lora_params), "lr": args.learning_rate
-            },
+            {"params": itertools.chain(*unet_lora_params), "lr": args.learning_rate},
             {
                 "params": itertools.chain(*text_encoder_lora_params),
                 "lr": text_lr,
@@ -722,21 +750,20 @@ def main(args):
         else itertools.chain(*unet_lora_params)
     )
 
-
-    if args.debug:
-        print(summary(vae, col_names=["num_params", "trainable"], verbose=1))
-        print(summary(unet, col_names=["num_params", "trainable"], verbose=1))
-        print(summary(text_encoder, col_names=["num_params", "trainable"], verbose=1))
-
-        with open(os.path.join(args.output_dir, "vae.txt"), "w") as f:
-            f.write(str(summary(vae, col_names=["num_params", "trainable"], verbose=2)))
-            f.close()
-        with open(os.path.join(args.output_dir, "unet.txt"), "w") as f:
-            f.write(str(summary(unet, col_names=["num_params", "trainable"], verbose=2)))
-            f.close()
-        with open(os.path.join(args.output_dir, "text_encoder.txt"), "w") as f:
-            f.write(str(summary(text_encoder, col_names=["num_params", "trainable"], verbose=2)))
-            f.close()
+    # if args.debug:
+    #     print(summary(vae, col_names=["num_params", "trainable"], verbose=1))
+    #     print(summary(unet, col_names=["num_params", "trainable"], verbose=1))
+    #     print(summary(text_encoder, col_names=["num_params", "trainable"], verbose=1))
+    #
+    #     with open(os.path.join(args.output_dir, "vae.txt"), "w") as f:
+    #         f.write(str(summary(vae, col_names=["num_params", "trainable"], verbose=2)))
+    #         f.close()
+    #     with open(os.path.join(args.output_dir, "unet.txt"), "w") as f:
+    #         f.write(str(summary(unet, col_names=["num_params", "trainable"], verbose=2)))
+    #         f.close()
+    #     with open(os.path.join(args.output_dir, "text_encoder.txt"), "w") as f:
+    #         f.write(str(summary(text_encoder, col_names=["num_params", "trainable"], verbose=2)))
+    #         f.close()
 
     optimizer = optimizer_class(
         params_to_optimize,
@@ -746,21 +773,23 @@ def main(args):
         eps=args.adam_epsilon,
     )
 
-    noise_scheduler = DDPMScheduler.from_pretrained(args.pretrained_model_name_or_path, subfolder="scheduler")
+    noise_scheduler = DDPMScheduler.from_pretrained(
+        args.pretrained_model_name_or_path, subfolder="scheduler"
+    )
 
     train_dataset = DreamBoothDataset(
         instance_data_root=args.instance_data_dir,
         instance_prompt=args.instance_prompt,
         class_data_root=args.class_data_dir if args.with_prior_preservation else None,
         class_prompt=args.class_prompt,
-        use_image_captions=args.use_image_captions,
-        unconditional_prompt=args.unconditional_prompt,
+        # use_image_captions=args.use_image_captions,
+        # unconditional_prompt=args.unconditional_promptAAAAAAAAAAAAAAAAAAAA,
         tokenizer=tokenizer,
         size=args.resolution,
-        augment_min_resolution=args.augment_min_resolution,
+        # augment_min_resolution=args.augment_min_resolution,
         augment_center_crop=args.augment_center_crop,
         augment_hflip=args.augment_hflip,
-        debug=args.debug,
+        # debug=args.debug,
     )
 
     def collate_fn(examples):
@@ -774,11 +803,11 @@ def main(args):
             pixel_values += [example["class_images"] for example in examples]
 
         # Apply text-conditioning dropout by inserting uninformative prompt
-        if args.conditioning_dropout_prob > 0:
-            unconditional_ids = [example["unconditional_prompt_ids"] for example in examples] * 2
-            for i, input_id in enumerate(input_ids):
-                if random.uniform(0.0, 1.0) <= args.conditioning_dropout_prob:
-                    input_ids[i] = unconditional_ids[i]
+        # if args.conditioning_dropout_prob > 0:
+        #     unconditional_ids = [example["unconditional_prompt_ids"] for example in examples] * 2
+        #     for i, input_id in enumerate(input_ids):
+        #         if random.uniform(0.0, 1.0) <= args.conditioning_dropout_prob:
+        #             input_ids[i] = unconditional_ids[i]
 
         pixel_values = torch.stack(pixel_values)
         pixel_values = pixel_values.to(memory_format=torch.contiguous_format).float()
@@ -797,12 +826,18 @@ def main(args):
         return batch
 
     train_dataloader = torch.utils.data.DataLoader(
-        train_dataset, batch_size=args.train_batch_size, shuffle=True, collate_fn=collate_fn, num_workers=1
+        train_dataset,
+        batch_size=args.train_batch_size,
+        shuffle=True,
+        collate_fn=collate_fn,
+        num_workers=1,
     )
 
     # Scheduler and math around the number of training steps.
     overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
+    num_update_steps_per_epoch = math.ceil(
+        len(train_dataloader) / args.gradient_accumulation_steps
+    )
     if args.max_train_steps is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
         overrode_max_train_steps = True
@@ -919,7 +954,6 @@ def main(args):
                 revision=args.revision,
             )
 
-
             save_lora_weight(pipeline.unet, os.path.join(save_dir, "lora_unet.pt"))
             if args.debug:
                 for _up, _down in extract_lora_ups_down(pipeline.unet):
@@ -945,7 +979,6 @@ def main(args):
                 # No arguments yet, leave at defaults for now
                 # tune_lora_scale(pipeline.text_encoder, 1.00)
                 # tune_lora_scale(pipeline.unet, 1.00)
-
 
             if args.save_sample_prompt is not None:
                 pipeline = pipeline.to(accelerator.device)
@@ -989,6 +1022,7 @@ def main(args):
         unet.train()
         if args.train_text_encoder:
             text_encoder.train()
+
         for step, batch in enumerate(train_dataloader):
             with accelerator.accumulate(unet):
                 # Convert images to latent space
