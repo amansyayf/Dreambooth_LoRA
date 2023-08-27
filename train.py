@@ -131,10 +131,10 @@ class DreamBoothDataset(Dataset):
             instance_image = instance_image.convert("RGB")
         if self.augment_transforms is not None:
             instance_image = self.augment_transforms(instance_image)
-            if self.debug:
-                hash_image = hashlib.sha1(instance_image.tobytes()).hexdigest()
-                image_filename = image_path.stem + f"-{hash_image}.jpg"
-                instance_image.save(os.path.join("/content/augment", image_filename))
+            # if self.debug:
+            #     hash_image = hashlib.sha1(instance_image.tobytes()).hexdigest()
+            #     image_filename = image_path.stem + f"-{hash_image}.jpg"
+            #     instance_image.save(os.path.join("/content/augment", image_filename))
         example["instance_images"] = self.image_transforms(instance_image)
 
         # if self.use_image_captions:
