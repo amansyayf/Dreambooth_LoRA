@@ -1,3 +1,6 @@
+# Bootstrapped from:
+# https://github.com/huggingface/diffusers/blob/main/examples/dreambooth/train_dreambooth.py
+
 import argparse
 import hashlib
 import itertools
@@ -6,10 +9,10 @@ import json
 import random
 import os
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 import subprocess
 import sys
-from typing import Optional
+
 import inspect
 
 import torch
@@ -955,11 +958,11 @@ def main(args):
             )
 
             save_lora_weight(pipeline.unet, os.path.join(save_dir, "lora_unet.pt"))
-            if args.debug:
-                for _up, _down in extract_lora_ups_down(pipeline.unet):
-                    print("First Unet Layer's Up Weight is now : ", _up.weight.data)
-                    print("First Unet Layer's Down Weight is now : ", _down.weight.data)
-                    break
+            # if args.debug:
+            #     for _up, _down in extract_lora_ups_down(pipeline.unet):
+            #         print("First Unet Layer's Up Weight is now : ", _up.weight.data)
+            #         print("First Unet Layer's Down Weight is now : ", _down.weight.data)
+            #         break
 
             if args.train_text_encoder:
                 save_lora_weight(
@@ -967,14 +970,14 @@ def main(args):
                     os.path.join(save_dir, "lora_text_encoder.pt"),
                     target_replace_module=["CLIPAttention"],
                 )
-                if args.debug:
-                    for _up, _down in extract_lora_ups_down(
-                            pipeline.text_encoder,
-                            target_replace_module=["CLIPAttention"],
-                    ):
-                        print("First Text Encoder Layer's Up Weight is now : ", _up.weight.data)
-                        print("First Text Encoder Layer's Down Weight is now : ", _down.weight.data)
-                        break
+                # if args.debug:
+                #     for _up, _down in extract_lora_ups_down(
+                #             pipeline.text_encoder,
+                #             target_replace_module=["CLIPAttention"],
+                #     ):
+                #         print("First Text Encoder Layer's Up Weight is now : ", _up.weight.data)
+                #         print("First Text Encoder Layer's Down Weight is now : ", _down.weight.data)
+                #         break
 
                 # No arguments yet, leave at defaults for now
                 # tune_lora_scale(pipeline.text_encoder, 1.00)
