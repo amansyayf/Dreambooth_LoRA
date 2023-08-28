@@ -51,4 +51,36 @@ Columns of pictures represent training steps, [500, 1000, 1500, 2000, 2500] star
 </p>
 <!-- #endregion -->
 
+## LORA rank
+Here it can be seen that as the rank increases, the quality increases. However with it the use of memory and training parameters abruptly increases.
+ 
+Columns of pictures represent seeds [1000, 2000, 3000, 4000] starting from the left.
+
+> rank=1
+<!-- #region -->
+<p align="center">
+<img  src="contents/1.jpg">
+</p>
+<!-- #endregion -->
+
+> rank=2
+<!-- #region -->
+<p align="center">
+<img  src="contents/2.jpg">
+</p>
+<!-- #endregion -->
+
+> rank=4
+<!-- #region -->
+<p align="center">
+<img  src="contents/4.jpg">
+</p>
+<!-- #endregion -->
+
+> rank=6
+<!-- #region -->
+<p align="center">
+<img  src="contents/6.jpg">
+</p>
+<!-- #endregion -->
 
