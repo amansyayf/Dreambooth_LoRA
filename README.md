@@ -9,8 +9,8 @@ As a result giving a prompt with chosen token identifier model output unique ima
 
 ## Experiments
 
-#Learning Rate and number of training steps
-Fine-tuning with all hyperparameters equal across runs, exept LR, number of training steps. Columns of pictures represent, [500, 1000, 1500, 2000, 2500] starting from the left. In out case (lr=1e-4, steps=2500) or (lr=5e-4, steps=1500) seems better.
+## Learning Rate and number of training steps
+Fine-tuning with all hyperparameters equal across runs, exept LR, number of training steps. Columns of pictures represent, [500, 1000, 1500, 2000, 2500] starting from the left. In out case (lr=1e-4, steps=2500) or (lr=5e-4, steps=1500) seems better. With second and forth prompth model have failure, probably due to low probability of co-occurrence in the initial training set and overfitting.
 
 > Lr=5e-5
 <!-- #region -->
