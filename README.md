@@ -7,14 +7,28 @@ Dreambooth solves two main problems: overfitting and language drift. In the arti
 As a result giving a prompt with chosen token identifier model output unique image preserving the subject instance features. There many possibilities to the modification of a subject instance, some of these include drawing a subject in a different place, color modification, drawing the subject from a different angle and art renditions.
 
 
-##Experiments
+## Experiments
 
 #Learning Rate and number of training steps
-Fine-tuning with all hyperparameters equal across runs, exept LR, number of training steps. Columns of pictures represent, [500, 1000, 1500, 2000, 2500] starting from the left. In out case (lr=1e-4, steps=2500) or (lr=5e-5, steps=1500) seems better.
+Fine-tuning with all hyperparameters equal across runs, exept LR, number of training steps. Columns of pictures represent, [500, 1000, 1500, 2000, 2500] starting from the left. In out case (lr=1e-4, steps=2500) or (lr=5e-4, steps=1500) seems better.
 
 > Lr=5e-5
 <!-- #region -->
 <p align="center">
 <img  src="contents/5e5.jpg">
+</p>
+<!-- #endregion -->
+
+> Lr=1e-4
+<!-- #region -->
+<p align="center">
+<img  src="contents/1e4.jpg">
+</p>
+<!-- #endregion -->
+
+> Lr=5e-4
+<!-- #region -->
+<p align="center">
+<img  src="contents/5e4.jpg">
 </p>
 <!-- #endregion -->
