@@ -586,12 +586,12 @@ def main(args):
             torch_dtype = torch.float16 if accelerator.device.type == "cuda" else torch.float32
             pipeline = StableDiffusionPipeline.from_pretrained(
                 args.pretrained_model_name_or_path,
-                # vae=AutoencoderKL.from_pretrained(
-                #     args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
-                #     subfolder=None if args.pretrained_vae_name_or_path else "vae",
-                #     revision=None if args.pretrained_vae_name_or_path else args.revision,
-                #     torch_dtype=torch_dtype,
-                # ),
+                vae=AutoencoderKL.from_pretrained(
+                    args.pretrained_vae_name_or_path or args.pretrained_model_name_or_path,
+                    subfolder=None if args.pretrained_vae_name_or_path else "vae",
+                    revision=None if args.pretrained_vae_name_or_path else args.revision,
+                    torch_dtype=torch_dtype,
+                ),
                 torch_dtype=torch_dtype,
                 safety_checker=None,
                 revision=args.revision
