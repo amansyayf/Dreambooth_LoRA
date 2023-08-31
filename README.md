@@ -8,6 +8,8 @@ As a result giving a prompt with chosen token identifier model output unique ima
 
 
 ## Experiments
+## Experiment settings 
+[Instance parameters](https://github.com/amansyayf/Dreambooth_LoRA/blob/main/contents/args.json) for all experiments. [Images](https://drive.google.com/drive/folders/1pYxUPXJnd-HPvvYS2ivD6UYzuBuoeHDZ?usp=sharing) for subject. [Images](https://drive.google.com/drive/folders/1G_FZ7_f09dx-m0auFNULcBi3uEqkcEAp?usp=sharing) for regularization. [Training](https://github.com/amansyayf/Dreambooth_LoRA/blob/main/training.ipynb) notebook. [Iference](https://github.com/amansyayf/Dreambooth_LoRA/blob/main/inference.ipynb) notebook.
 ## Prior Preservation Loss 
 Check in practice the important of this Loss. Indeed it seems preventing from overfitting and bringing diversity in pictures, when we have unusual prompts. But without using it better for betraying subject features. 
 
