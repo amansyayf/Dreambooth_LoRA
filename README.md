@@ -40,14 +40,14 @@ Columns of pictures represent training steps, [500, 1000, 1500, 2000, 2500] star
 > Lr=1e-4
 <!-- #region -->
 <p align="center">
-<img  src="contents/1e-4(1).jpg">
+<img  src="contents/1e-4 (1).jpg">
 </p>
 <!-- #endregion -->
 
 > Lr=5e-4
 <!-- #region -->
 <p align="center">
-<img  src="contents/5e-4(1).jpg">
+<img  src="contents/5e-4 (1).jpg">
 </p>
 <!-- #endregion -->
 
