@@ -53,7 +53,7 @@ Columns of pictures represent training steps, [500, 1000, 1500, 2000, 2500] star
 <!-- #endregion -->
 
 ## LORA rank
-Here it can be seen that as the rank increases, the quality increases. However, with it the use of memory and training parameters abruptly increases.
+Here it can be seen that as the rank increases, the quality increases, but diversity decreases. However, with it the use of memory and training parameters abruptly increases.
  
 Columns of pictures represent seeds [1000, 2000, 3000, 4000] starting from the left.
 
@@ -89,5 +89,19 @@ Columns of pictures represent seeds [1000, 2000, 3000, 4000] starting from the l
 <!-- #region -->
 <p align="center">
 <img  src="contents/8.jpg">
+</p>
+<!-- #endregion -->
+
+## Other parameters 
+Varying other parameters (augmenting images, lr for text encoder, type of scheduler) did not bring as many changes as the parameters above.
+
+## Final results and conclusion
+
+After all experiments, the final [parameters](https://github.com/amansyayf/Dreambooth_LoRA/blob/main/contents/final_args.json) were chosen. We managed to repeat some examples from the original article. But the final model fails to display the penguin from a distance, but it is able to make some transformation with close-up view (probably due to portrait-like images in the dataset)
+
+> final model. seed = 40000
+<!-- #region -->
+<p align="center">
+<img  src="contents/final.jpg">
 </p>
 <!-- #endregion -->
